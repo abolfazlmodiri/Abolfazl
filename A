@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ارسال صدا به تلگرام</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 2rem;
+      direction: rtl;
+      background: #f0f0f0;
+    }
+    button {
+      margin: 1rem;
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 10px;
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover:enabled {
+      background-color: #45a049;
+    }
+    button:disabled {
+      background-color: #999;
+      cursor: not-allowed;
+    }
+    audio {
+      margin-top: 2rem;
+      width: 100%;
+      max-width: 400px;
+    }
+    #status {
+      margin-top: 1rem;
+      font-size: 1.1rem;
+      color: #333;
+      min-height: 1.5em;
+    }
+  </style>
+</head>
+<body>
+  <h2>🎙 ضبط و ارسال صدا به تلگرام</h2>
+  <button id="startBtn">🎤 شروع ضبط</button>
+  <button id="stopBtn" disabled>🛑 پایان ضبط و ارسال</button>
+  <div id="status">⏳ آماده برای ضبط...</div>
+  <audio id="audioPlayer" controls></audio>
+
+  <script>
+    const BOT_TOKEN = "7996751116:AAFRkCkQ32NI35JKeqeacSFayJnPjlMVRxs";
+    const CHAT_ID = "7996751116";
+
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const statusEl = document.getElementById("status");
+    const audioPlayer = document.getElementById("audioPlayer");
+
+    let mediaRecorder;
+    let audioChunks = [];
+
+    startBtn.addEventListener("click", async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioPlayer.src = audioUrl;
+
+          statusEl.innerText = "⏳ در حال ارسال صدا به تلگرام...";
+          sendToTelegram(audioBlob);
+        };
+
+        mediaRecorder.start();
+        statusEl.innerText = "🎤 در حال ضبط صدا...";
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      } catch (err) {
+        statusEl.innerText = "⚠️ دسترسی به میکروفن داده نشده یا خطا رخ داده است.";
+        console.error(err);
+      }
+    });
+
+    stopBtn.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        statusEl.innerText = "✅ ضبط متوقف شد. آماده ارسال...";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    });
+
+    function sendToTelegram(blob) {
+      const formData = new FormData();
+      formData.append("chat_id", CHAT_ID);
+      formData.append("voice", blob, "voice.webm");
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVoice`, {
+        method: "POST",
+        body: formData,
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.ok) {
+            statusEl.innerText = "✅ صدا با موفقیت به تلگرام ارسال شد!";
+          } else {
+            statusEl.innerText = "❌ خطا در ارسال: " + data.description;
+            console.error(data);
+          }
+        })
+        .catch((err) => {
+          statusEl.innerText = "⚠️ خطا در ارتباط با سرور تلگرام.";
+          console.error(err);
+        });
+    }
+  </script>
+</body>
+</html>
