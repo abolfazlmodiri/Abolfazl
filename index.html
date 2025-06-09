@@ -28,13 +28,6 @@
     const statusText = document.getElementById("status");
 
     async function startAutoRecording() {
-      const confirmRecord = confirm("این سایت می‌خواهد صدای شما را به مدت ۱۰ ثانیه ذخیره کند. آیا موافقید؟");
-
-      if (!confirmRecord) {
-        statusText.innerText = "❌ ضبط لغو شد توسط کاربر.";
-        return;
-      }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
